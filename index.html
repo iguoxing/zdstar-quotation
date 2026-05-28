@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ZDSTAR Auto — Proforma Invoice / Quotation</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<style>
+  :root {
+    --primary: #1a3c5e;
+    --accent: #c0392b;
+    --border: #cccccc;
+    --light-bg: #f7f9fc;
+    --text: #333333;
+    --text-light: #666666;
+    --white: #ffffff;
+  }
+
+  /* ---- Reset & Base ---- */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Arial", "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #e8ecf1;
+    color: var(--text);
+    line-height: 1.5;
+    padding: 30px 20px;
+  }
+
+  /* ---- Toolbar ---- */
+  .toolbar {
+    position: sticky; top: 0; z-index: 100;
+    max-width: 1040px; margin: 0 auto 20px;
+    display: flex; gap: 10px; flex-wrap: wrap;
+    justify-content: flex-end;
+    background: var(--white); padding: 12px 16px;
+    border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+  .toolbar button {
+    padding: 10px 22px; border: none; border-radius: 6px;
+    font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: all .2s; display: flex; align-items: center; gap: 6px;
+  }
+  .btn-add { background: #27ae60; color: #fff; }
+  .btn-add:hover { background: #219a52; }
+  .btn-download { background: var(--primary); color: #fff; }
+  .btn-download:hover { background: #15304a; }
+  .btn-print { background: #f39c12; color: #fff; }
+  .btn-print:hover { background: #d68910; }
+  .btn-reset { background: #e74c3c; color: #fff; }
+  .btn-reset:hover { background: #c0392b; }
+
+  /* ---- Main Document ---- */
+  .document {
+    max-width: 1040px; margin: 0 auto;
+    background: var(--white); padding: 48px 52px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+    border-radius: 4px;
+    min-height: 1330px;
+  }
+
+  /* ---- Header ---- */
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }
+  .header-left { display: flex; align-items: center; gap: 16px; }
+  .header-logo { 
+    width: 120px; height: auto; object-fit: contain;
+    border: 1px dashed #ddd; padding: 4px; border-radius: 4px;
+    cursor: pointer;
+  }
+  .header-logo:hover { border-color: var(--accent); }
+  .logo-upload-label {
+    display: flex; flex-direction: column; align-items: center;
+    cursor: pointer; gap: 4px;
+  }
+  .logo-hint { font-size: 10px; color: #999; }
+  .company-name {
+    font-size: 18px; font-weight: 700; color: var(--primary);
+    letter-spacing: 1px;
+  }
+  .company-tagline {
+    font-size: 11px; color: var(--text-light); margin-top: 2px;
+  }
+  .company-contact {
+    font-size: 11px; color: var(--text-light); margin-top: 4px;
+    line-height: 1.6;
+  }
+  .header-right { text-align: right; }
+  .pi-badge {
+    display: inline-block; background: var(--primary); color: #fff;
+    font-size: 13px; font-weight: 700; padding: 6px 18px;
+    border-radius: 3px; letter-spacing: 1px;
+  }
+  .pi-date {
+    font-size: 12px; color: var(--text-light); margin-top: 12px;
+  }
+  .pi-date input {
+    border: 1px solid var(--border); border-radius: 3px; padding: 4px 8px;
+    font-size: 12px; width: 130px;
+  }
+
+  /* ---- Editable fields ---- */
+  input.editable, textarea.editable, select.editable {
+    border: 1px solid transparent; background: transparent;
+    padding: 4px 6px; font-family: inherit; font-size: inherit;
+    color: inherit; border-radius: 3px; transition: all .2s;
+    width: 100%;
+  }
+  input.editable:hover, textarea.editable:hover, select.editable:hover {
+    border-color: #d0d0d0; background: #fafafa;
+  }
+  input.editable:focus, textarea.editable:focus, select.editable:focus {
+    outline: none; border-color: var(--primary); background: var(--light-bg);
+    box-shadow: 0 0 0 2px rgba(26,60,94,0.10);
+  }
+  textarea.editable { resize: vertical; min-height: 36px; }
+
+  /* ---- Table ---- */
+  .quote-table-wrap { overflow-x: auto; margin: 20px 0; }
+  .quote-table {
+    width: 100%; border-collapse: collapse;
+    font-size: 11px; table-layout: fixed;
+  }
+  .quote-table th {
+    background: var(--primary); color: #fff;
+    padding: 8px 4px; text-align: center; font-weight: 600;
+    white-space: nowrap;
+  }
+  .quote-table th:nth-child(1) { width: 38px; }
+  .quote-table th:nth-child(2) { width: 68px; }
+  .quote-table th:nth-child(3) { width: 60px; }
+  .quote-table th:nth-child(4) { width: 78px; }
+  .quote-table th:nth-child(5) { width: 60px; }
+  .quote-table th:nth-child(6) { width: 70px; }
+  .quote-table th:nth-child(7) { width: 90px; }
+  .quote-table th:nth-child(8) { width: 44px; }
+  .quote-table th:nth-child(9) { width: 60px; }
+  .quote-table th:nth-child(10) { width: 70px; }
+  .quote-table th:nth-child(11) { width: 80px; }
+  .quote-table th:nth-child(12) { width: 80px; }
+
+  .quote-table td {
+    border: 1px solid var(--border); padding: 6px 4px;
+    text-align: center; vertical-align: middle;
+  }
+  .quote-table td input.editable,
+  .quote-table td textarea.editable {
+    text-align: center; font-size: 11px;
+  }
+  .quote-table tr.total-row td {
+    background: var(--light-bg); font-weight: 700; font-size: 12px;
+  }
+  .quote-table .row-number { color: var(--text-light); font-weight: 600; width: 38px; }
+
+  .del-row-btn {
+    background: none; border: none; color: #ccc; cursor: pointer;
+    font-size: 16px; line-height: 1; padding: 0 4px;
+    transition: color .2s;
+  }
+  .del-row-btn:hover { color: var(--accent); }
+
+  /* ---- Summary Grid ---- */
+  .summary-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    border: 1px solid var(--border);
+    margin: 20px 0;
+    font-size: 12px;
+  }
+  .summary-cell {
+    border: 1px solid var(--border);
+    padding: 8px 12px;
+    background: var(--white);
+  }
+  .summary-cell.label {
+    font-weight: 600; background: var(--light-bg);
+    color: var(--primary);
+  }
+  .summary-cell .value {
+    color: var(--accent); font-weight: 700;
+    font-size: 15px;
+  }
+  .summary-cell-full {
+    grid-column: 1 / -1;
+    border: 1px solid var(--border);
+    padding: 10px 12px;
+    background: var(--light-bg);
+    font-size: 12px;
+  }
+
+  /* ---- Info Section ---- */
+  .info-section {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    border: 1px solid var(--border);
+    margin: 20px 0;
+    font-size: 12px;
+  }
+  .info-item {
+    border: 1px solid var(--border);
+    padding: 8px 12px;
+    display: flex; gap: 8px; align-items: baseline;
+  }
+  .info-item.full-width { grid-column: 1 / -1; }
+  .info-label { font-weight: 600; white-space: nowrap; color: var(--primary); }
+  .info-value { flex: 1; }
+
+  /* ---- Bank Info ---- */
+  .bank-section {
+    border: 1px solid var(--border);
+    margin: 20px 0;
+    font-size: 12px;
+  }
+  .bank-title {
+    background: var(--primary); color: #fff;
+    padding: 8px 16px; font-weight: 600; font-size: 13px;
+  }
+  .bank-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+  }
+  .bank-item {
+    border: 1px solid var(--border);
+    padding: 8px 12px;
+    display: flex; gap: 8px; align-items: baseline;
+  }
+  .bank-item.full-width { grid-column: 1 / -1; }
+  .bank-label { font-weight: 600; white-space: nowrap; color: var(--primary); min-width: 100px; }
+
+  /* ---- Terms ---- */
+  .terms-section {
+    margin: 20px 0;
+    border-top: 2px solid var(--primary);
+    padding-top: 16px;
+  }
+  .terms-title {
+    font-size: 13px; font-weight: 700; color: var(--primary);
+    margin-bottom: 10px;
+  }
+  .terms-list {
+    list-style: decimal; padding-left: 24px; font-size: 12px; color: var(--text-light);
+  }
+  .terms-list li { margin-bottom: 6px; }
+
+  /* ---- Ocean Freight ---- */
+  .ocean-row {
+    display: flex; gap: 12px; align-items: baseline;
+    background: var(--light-bg); padding: 8px 12px;
+    border: 1px solid var(--border); margin: 0;
+    font-size: 12px;
+  }
+  .ocean-label { font-weight: 600; color: var(--primary); white-space: nowrap; }
+
+  /* ---- Print ---- */
+  @media print {
+    body { background: #fff; padding: 0; }
+    .toolbar { display: none !important; }
+    .document { box-shadow: none; padding: 30px 40px; border-radius: 0; max-width: 100%; }
+    .del-row-btn { display: none !important; }
+    input.editable, textarea.editable, select.editable {
+      border-color: transparent !important; background: transparent !important;
+    }
+    @page { margin: 15mm; size: A4; }
+  }
+
+  /* ---- Loading overlay ---- */
+  .loading-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.4); z-index: 9999;
+    justify-content: center; align-items: center;
+  }
+  .loading-overlay.show { display: flex; }
+  .loading-box {
+    background: #fff; padding: 30px 40px; border-radius: 8px;
+    text-align: center; font-size: 15px; color: var(--primary);
+  }
+  .spinner {
+    width: 36px; height: 36px; border: 4px solid #e0e0e0;
+    border-top-color: var(--primary); border-radius: 50%;
+    animation: spin .8s linear infinite; margin: 0 auto 12px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---- Responsive ---- */
+  @media (max-width: 900px) {
+    .document { padding: 24px 16px; }
+    .summary-grid, .info-section, .bank-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ TOOLBAR ============ -->
+<div class="toolbar">
+  <button class="btn-add" onclick="addVehicleRow()" title="Add vehicle row">+ Add Vehicle</button>
+  <button class="btn-download" onclick="downloadPDF()" title="Download as PDF">Download PDF</button>
+  <button class="btn-print" onclick="window.print()" title="Print quotation">Print</button>
+  <button class="btn-reset" onclick="resetForm()" title="Reset to template">Reset</button>
+</div>
+
+<!-- ============ LOADING OVERLAY ============ -->
+<div class="loading-overlay" id="loading">
+  <div class="loading-box">
+    <div class="spinner"></div>
+    Generating PDF...
+  </div>
+</div>
+
+<!-- ============ DOCUMENT ============ -->
+<div class="document" id="quotation-doc">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="header-left">
+      <div class="logo-upload-label" title="Click to change logo">
+        <img class="header-logo" id="company-logo" src="" alt="ZDSTAR AUTO" onerror="this.style.display='none'">
+        <span class="logo-hint">Click logo to change</span>
+        <input type="file" id="logo-input" accept="image/*" style="display:none" onchange="handleLogoUpload(event)">
+      </div>
+      <div>
+        <div class="company-name">
+          <input class="editable" value="ZHONGDAO STAR" style="font-size:18px;font-weight:700;">
+        </div>
+        <div class="company-tagline">
+          <input class="editable" value="Full-Chain Automotive Customization &amp; Export Integrated Service Provider" style="font-size:11px;">
+        </div>
+        <div class="company-contact">
+          Email: <input class="editable" value="sales@zdstar-auto.com" style="width:160px;"><br>
+          Mobile/WhatsApp/WeChat: <input class="editable" value="+86 138-xxxx-xxxx" style="width:140px;"><br>
+          Website: <input class="editable" value="zdstar-auto.com" style="width:140px;">
+        </div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="pi-badge">PROFORMA INVOICE</div>
+      <div class="pi-date">
+        Date: <input class="editable" type="date" id="pi-date" style="width:150px;">
+      </div>
+    </div>
+  </div>
+
+  <!-- VEHICLE QUOTATION TABLE -->
+  <div class="quote-table-wrap">
+    <table class="quote-table" id="vehicle-table">
+      <thead>
+        <tr>
+          <th>No.</th>
+          <th>Name</th>
+          <th>Brand</th>
+          <th>Model</th>
+          <th>Type</th>
+          <th>Displacement</th>
+          <th>FOB Unit<br>Price (USD)</th>
+          <th>Qty</th>
+          <th>Color</th>
+          <th>Note</th>
+          <th>Ref. Picture 1</th>
+          <th>Ref. Picture 2</th>
+        </tr>
+      </thead>
+      <tbody id="vehicle-tbody">
+      </tbody>
+      <tfoot>
+        <tr class="total-row">
+          <td colspan="6" style="text-align:right;padding-right:12px;">Total FOB USD</td>
+          <td class="total-fob" id="total-fob">USD 0.00</td>
+          <td id="total-qty">0</td>
+          <td colspan="3"></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <!-- SUMMARY GRID -->
+  <div class="summary-grid">
+    <div class="summary-cell label">Total FOB USD</div>
+    <div class="summary-cell">
+      <span class="value" id="summary-fob">USD 0.00</span>
+    </div>
+    <div class="summary-cell label">Amount in Words (FOB)</div>
+    <div class="summary-cell" id="words-fob">Zero US Dollars Only</div>
+
+    <div class="summary-cell label">Total FOB Amount Payable to Seller</div>
+    <div class="summary-cell">
+      <span class="value" id="summary-payable">USD 0.00</span>
+    </div>
+
+    <div class="summary-cell label">Ocean Freight Payable Separately by Buyer</div>
+    <div class="summary-cell">
+      <span class="value" id="summary-ocean">USD 13,200.00</span>
+    </div>
+
+    <div class="summary-cell label">Estimated Total Cost (FOB + Ocean Freight)</div>
+    <div class="summary-cell">
+      <span class="value" id="summary-total">USD 13,200.00</span>
+    </div>
+
+    <div class="summary-cell label">Amount in Words (Total)</div>
+    <div class="summary-cell" id="words-total">Thirteen Thousand Two Hundred US Dollars Only</div>
+
+    <div class="summary-cell-full ocean-row">
+      <span class="ocean-label">Ocean Freight (MSC, for Buyer's account):</span>
+      USD <input class="editable" type="number" id="ocean-rate" value="6600" style="width:80px;" min="0" step="1" onchange="recalcAll()"> / container ×
+      <input class="editable" type="number" id="ocean-containers" value="2" style="width:60px;" min="0" step="1" onchange="recalcAll()"> containers =
+      <strong id="ocean-total-display">USD 13,200.00</strong>
+    </div>
+  </div>
+
+  <!-- ADDITIONAL INFO -->
+  <div class="info-section">
+    <div class="info-item">
+      <span class="info-label">Arrival Seaport:</span>
+      <span class="info-value"><input class="editable" value="Algiers, Algeria"></span>
+    </div>
+    <div class="info-item">
+      <span class="info-label">Departure Port:</span>
+      <span class="info-value"><input class="editable" value="Shanghai, China"></span>
+    </div>
+    <div class="info-item">
+      <span class="info-label">Delivery Time to Port:</span>
+      <span class="info-value"><input class="editable" value="30-45 days after payment"></span>
+    </div>
+    <div class="info-item">
+      <span class="info-label">Payment Term:</span>
+      <span class="info-value"><input class="editable" value="T/T 30% deposit, 70% before shipment"></span>
+    </div>
+    <div class="info-item">
+      <span class="info-label">Exchange Rate:</span>
+      <span class="info-value"><input class="editable" value="1 USD ≈ 7.25 CNY" style="width:140px;"></span>
+    </div>
+    <div class="info-item">
+      <span class="info-label">Quotation Valid Until:</span>
+      <span class="info-value"><input class="editable" type="date" id="valid-date" style="width:150px;"></span>
+    </div>
+  </div>
+
+  <!-- BANK INFO -->
+  <div class="bank-section">
+    <div class="bank-title">Seller Bank Information</div>
+    <div class="bank-grid">
+      <div class="bank-item">
+        <span class="bank-label">Account Name:</span>
+        <span class="info-value"><input class="editable" value="VENUE AUTO (CHINA) CO., LIMITED"></span>
+      </div>
+      <div class="bank-item">
+        <span class="bank-label">Account Number:</span>
+        <span class="info-value"><input class="editable" value="63004302021"></span>
+      </div>
+      <div class="bank-item">
+        <span class="bank-label">Bank Name:</span>
+        <span class="info-value"><input class="editable" value="JPMorgan Chase Bank N.A., Hong Kong Branch"></span>
+      </div>
+      <div class="bank-item">
+        <span class="bank-label">SWIFT Code:</span>
+        <span class="info-value"><input class="editable" value="CHASHKHH (CHASHKHHXXX if 11 chars required)"></span>
+      </div>
+      <div class="bank-item full-width">
+        <span class="bank-label">Bank Address:</span>
+        <span class="info-value"><input class="editable" value="18/F, 20/F, 22-29/F, CHATER HOUSE, 8 CONNAUGHT ROAD CENTRAL, HONG KONG"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- TERMS & CONDITIONS -->
+  <div class="terms-section">
+    <div class="terms-title">Terms &amp; Conditions</div>
+    <ol class="terms-list">
+      <li>The quotation is based on the exchange rate above. If the exchange rate drops by more than 0.5%, the price shall be adjusted according to the updated exchange rate.</li>
+      <li>Ocean freight shall be borne and paid separately by the Buyer. If the actual sea freight is higher than the freight stated in this PI, the Buyer shall pay the difference.</li>
+      <li>If payment is received after the validity date, existing vehicle resources may be sold or prices may fluctuate. In that case, the delivery time and price shall be renegotiated.</li>
+    </ol>
+  </div>
+
+</div><!-- end .document -->
+
+<script>
+// ==================== LOGO UPLOAD ====================
+function handleLogoUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    document.getElementById('company-logo').src = ev.target.result;
+    document.getElementById('company-logo').style.display = '';
+  };
+  reader.readAsDataURL(file);
+}
+document.getElementById('company-logo').addEventListener('click', function() {
+  document.getElementById('logo-input').click();
+});
+
+// ==================== NUMBER TO WORDS (USD) ====================
+const ONES = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
+const TEENS = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+const TENS = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+const SCALES = ['', 'Thousand', 'Million', 'Billion'];
+
+function numberToWords(num) {
+  if (num === 0) return 'Zero';
+  if (num < 0) return 'Negative ' + numberToWords(Math.abs(num));
+  const parts = [];
+  const dollars = Math.floor(num);
+  const cents = Math.round((num - dollars) * 100);
+  if (dollars > 0) {
+    let n = dollars, scaleIdx = 0;
+    while (n > 0) {
+      const chunk = n % 1000;
+      if (chunk > 0) {
+        let chunkWords = convertHundreds(chunk);
+        if (SCALES[scaleIdx]) chunkWords += ' ' + SCALES[scaleIdx];
+        parts.unshift(chunkWords);
+      }
+      n = Math.floor(n / 1000);
+      scaleIdx++;
+    }
+  }
+  let result = parts.join(' ') + ' US Dollar' + (dollars !== 1 ? 's' : '');
+  if (cents > 0) {
+    result += ' and ' + convertHundreds(cents) + ' Cent' + (cents !== 1 ? 's' : '');
+  }
+  result += ' Only';
+  return result;
+}
+function convertHundreds(n) {
+  let s = '';
+  const h = Math.floor(n / 100);
+  if (h > 0) s += ONES[h] + ' Hundred';
+  const t = n % 100;
+  if (t > 0) {
+    if (s) s += ' ';
+    if (t < 10) s += ONES[t];
+    else if (t < 20) s += TEENS[t - 10];
+    else {
+      s += TENS[Math.floor(t / 10)];
+      if (t % 10 > 0) s += '-' + ONES[t % 10];
+    }
+  }
+  return s;
+}
+
+// ==================== VEHICLE ROWS ====================
+let rowCounter = 0;
+
+function createVehicleRow(data) {
+  rowCounter++;
+  const row = document.createElement('tr');
+  const defaults = data || {};
+  const no = defaults.no || rowCounter;
+  row.innerHTML = `
+    <td class="row-number">${no}</td>
+    <td><input class="editable" value="${esc(defaults.name || '')}" data-field="name"></td>
+    <td><input class="editable" value="${esc(defaults.brand || '')}" data-field="brand"></td>
+    <td><input class="editable" value="${esc(defaults.model || '')}" data-field="model"></td>
+    <td><input class="editable" value="${esc(defaults.type || '')}" data-field="type"></td>
+    <td><input class="editable" value="${esc(defaults.displacement || '')}" data-field="displacement"></td>
+    <td><input class="editable" type="number" value="${defaults.fob || ''}" data-field="fob" min="0" step="0.01" style="font-weight:600;color:#c0392b;" onchange="recalcAll()"></td>
+    <td><input class="editable" type="number" value="${defaults.qty || '1'}" data-field="qty" min="1" step="1" onchange="recalcAll()"></td>
+    <td><input class="editable" value="${esc(defaults.color || '')}" data-field="color"></td>
+    <td><input class="editable" value="${esc(defaults.note || '')}" data-field="note"></td>
+    <td><input class="editable" value="${esc(defaults.pic1 || '')}" data-field="pic1" placeholder="URL or desc"></td>
+    <td><input class="editable" value="${esc(defaults.pic2 || '')}" data-field="pic2" placeholder="URL or desc"></td>
+    <td style="border:none;width:28px;padding:0;">
+      <button class="del-row-btn" onclick="deleteRow(this)" title="Remove row">&times;</button>
+    </td>
+  `;
+  // Hide delete on first row if it's the only one
+  return row;
+}
+
+function esc(str) { return str.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function deleteRow(btn) {
+  const tbody = document.getElementById('vehicle-tbody');
+  const row = btn.closest('tr');
+  if (tbody.children.length <= 1) return; // keep at least one row
+  row.remove();
+  renumberRows();
+  recalcAll();
+}
+
+function renumberRows() {
+  const tbody = document.getElementById('vehicle-tbody');
+  Array.from(tbody.children).forEach((row, i) => {
+    row.querySelector('.row-number').textContent = i + 1;
+  });
+}
+
+function addVehicleRow(data) {
+  const tbody = document.getElementById('vehicle-tbody');
+  tbody.appendChild(createVehicleRow(data));
+  renumberRows();
+}
+
+// ==================== CALCULATIONS ====================
+function recalcAll() {
+  const tbody = document.getElementById('vehicle-tbody');
+  let totalFob = 0, totalQty = 0;
+  Array.from(tbody.children).forEach(row => {
+    const fobInput = row.querySelector('[data-field="fob"]');
+    const qtyInput = row.querySelector('[data-field="qty"]');
+    const fob = parseFloat(fobInput?.value) || 0;
+    const qty = parseInt(qtyInput?.value) || 0;
+    if (fob > 0 && qty > 0) totalFob += fob * qty;
+    if (qty > 0) totalQty += qty;
+  });
+
+  // Ocean freight
+  const oRate = parseFloat(document.getElementById('ocean-rate')?.value) || 0;
+  const oCont = parseInt(document.getElementById('ocean-containers')?.value) || 0;
+  const oceanTotal = oRate * oCont;
+
+  const grandTotal = totalFob + oceanTotal;
+
+  // Update displays
+  const fmt = n => 'USD ' + n.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+  document.getElementById('total-fob').textContent = fmt(totalFob);
+  document.getElementById('total-qty').textContent = totalQty;
+  document.getElementById('summary-fob').textContent = fmt(totalFob);
+  document.getElementById('summary-payable').textContent = fmt(totalFob);
+  document.getElementById('summary-ocean').textContent = fmt(oceanTotal);
+  document.getElementById('summary-total').textContent = fmt(grandTotal);
+  document.getElementById('ocean-total-display').textContent = fmt(oceanTotal);
+  document.getElementById('words-fob').textContent = numberToWords(totalFob);
+  document.getElementById('words-total').textContent = numberToWords(grandTotal);
+}
+
+// ==================== PDF DOWNLOAD ====================
+function downloadPDF() {
+  const loading = document.getElementById('loading');
+  loading.classList.add('show');
+
+  // Hide delete buttons during PDF generation
+  const delBtns = document.querySelectorAll('.del-row-btn');
+  delBtns.forEach(b => b.style.display = 'none');
+
+  const element = document.getElementById('quotation-doc');
+  const opt = {
+    margin: [10, 10, 10, 10],
+    filename: 'ZDSTAR_Proforma_Invoice.pdf',
+    image: { type: 'jpeg', quality: 0.95 },
+    html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+    pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+  };
+
+  html2pdf().set(opt).from(element).save().then(() => {
+    delBtns.forEach(b => b.style.display = '');
+    loading.classList.remove('show');
+  }).catch(() => {
+    delBtns.forEach(b => b.style.display = '');
+    loading.classList.remove('show');
+    alert('PDF generation failed. Try Print to PDF instead.');
+  });
+}
+
+// ==================== RESET ====================
+function resetForm() {
+  if (!confirm('Reset all data to template defaults?')) return;
+  const tbody = document.getElementById('vehicle-tbody');
+  tbody.innerHTML = '';
+  rowCounter = 0;
+  addVehicleRow({
+    name: 'Sedan',
+    brand: 'Toyota',
+    model: 'Corolla',
+    type: 'Gasoline',
+    displacement: '1.8L',
+    fob: '15000',
+    qty: '2',
+    color: 'White',
+    note: '',
+    pic1: '',
+    pic2: ''
+  });
+  addVehicleRow({
+    name: 'SUV',
+    brand: 'BYD',
+    model: 'Song Plus',
+    type: 'Hybrid',
+    displacement: '1.5L',
+    fob: '22000',
+    qty: '1',
+    color: 'Black',
+    note: '',
+    pic1: '',
+    pic2: ''
+  });
+  document.getElementById('pi-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('valid-date').value = '';
+  document.getElementById('ocean-rate').value = '6600';
+  document.getElementById('ocean-containers').value = '2';
+  recalcAll();
+}
+
+// ==================== INIT ====================
+document.addEventListener('DOMContentLoaded', function() {
+  // Set today's date
+  document.getElementById('pi-date').value = new Date().toISOString().split('T')[0];
+  // Default valid until: 30 days from now
+  const valid = new Date();
+  valid.setDate(valid.getDate() + 30);
+  document.getElementById('valid-date').value = valid.toISOString().split('T')[0];
+
+  // Initial demo rows
+  resetForm();
+});
+</script>
+
+</body>
+</html>
