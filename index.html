@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ZDSTAR Auto — Proforma Invoice / Quotation</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
 <style>
   :root {
     --primary: #1a3c5e;
@@ -42,8 +43,10 @@
   }
   .btn-add { background: #27ae60; color: #fff; }
   .btn-add:hover { background: #219a52; }
-  .btn-download { background: var(--primary); color: #fff; }
-  .btn-download:hover { background: #15304a; }
+.btn-download { background: var(--primary); color: #fff; }
+.btn-download:hover { background: #15304a; }
+.btn-word { background: #2b5797; color: #fff; }
+.btn-word:hover { background: #1e3f6e; }
   .btn-print { background: #f39c12; color: #fff; }
   .btn-print:hover { background: #d68910; }
   .btn-reset { background: #e74c3c; color: #fff; }
@@ -297,6 +300,7 @@
 <div class="toolbar">
   <button class="btn-add" onclick="addVehicleRow()" title="Add vehicle row">+ Add Vehicle</button>
   <button class="btn-download" onclick="downloadPDF()" title="Download as PDF">Download PDF</button>
+  <button class="btn-word" onclick="downloadWord()" title="Download as Word">Download Word</button>
   <button class="btn-print" onclick="window.print()" title="Print quotation">Print</button>
   <button class="btn-reset" onclick="resetForm()" title="Reset to template">Reset</button>
 </div>
@@ -628,7 +632,269 @@ function recalcAll() {
   document.getElementById('words-total').textContent = numberToWords(grandTotal);
 }
 
-// ==================== PDF DOWNLOAD ====================
+// ==================== WORD DOWNLOAD ====================
+function getVal(sel) { const el = document.querySelector(sel); return el ? (el.value || el.textContent || '').trim() : ''; }
+function getInputVal(sel) { const el = document.querySelector(sel); return el ? el.value.trim() : ''; }
+
+function downloadWord() {
+  const loading = document.getElementById('loading');
+  loading.querySelector('.loading-box').innerHTML = '<div class="spinner"></div>Generating Word...';
+  loading.classList.add('show');
+
+  setTimeout(() => {
+    try {
+      const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
+              AlignmentType, BorderStyle, WidthType, ShadingType, HeadingLevel, PageBreak } = docx;
+
+      const border = { style: BorderStyle.SINGLE, size: 1, color: "CCCCCC" };
+      const borders = { top: border, bottom: border, left: border, right: border };
+      const cellMargins = { top: 60, bottom: 60, left: 80, right: 80 };
+      const headerShading = { fill: "1a3c5e", type: ShadingType.CLEAR };
+      const lightShading = { fill: "f7f9fc", type: ShadingType.CLEAR };
+
+      function headerCell(text, width) {
+        return new TableCell({
+          borders, width: { size: width, type: WidthType.DXA },
+          shading: headerShading, margins: cellMargins,
+          verticalAlign: "center",
+          children: [new Paragraph({ alignment: AlignmentType.CENTER,
+            children: [new TextRun({ text, bold: true, color: "FFFFFF", font: "Arial", size: 16 })] })]
+        });
+      }
+      function dataCell(text, width, opts = {}) {
+        return new TableCell({
+          borders, width: { size: width, type: WidthType.DXA },
+          margins: cellMargins, verticalAlign: "center",
+          shading: opts.shading || undefined,
+          children: [new Paragraph({ alignment: AlignmentType.CENTER,
+            children: [new TextRun({ text: String(text || ''),
+              font: "Arial", size: 16, bold: !!opts.bold, color: opts.color || "333333" })] })]
+        });
+      }
+
+      // Collect vehicle rows
+      const rows = [];
+      const tbody = document.getElementById('vehicle-tbody');
+      Array.from(tbody.children).forEach(row => {
+        const get = f => row.querySelector('[data-field="' + f + '"]');
+        rows.push({
+          no: row.querySelector('.row-number')?.textContent || '',
+          name: get('name')?.value || '',
+          brand: get('brand')?.value || '',
+          model: get('model')?.value || '',
+          type: get('type')?.value || '',
+          displacement: get('displacement')?.value || '',
+          fob: parseFloat(get('fob')?.value) || 0,
+          qty: parseInt(get('qty')?.value) || 0,
+          color: get('color')?.value || '',
+          note: get('note')?.value || ''
+        });
+      });
+
+      // Calculate totals
+      let totalFob = 0, totalQty = 0;
+      rows.forEach(r => { totalFob += r.fob * r.qty; totalQty += r.qty; });
+      const oRate = parseFloat(getInputVal('#ocean-rate')) || 0;
+      const oCont = parseInt(getInputVal('#ocean-containers')) || 0;
+      const oceanTotal = oRate * oCont;
+      const grandTotal = totalFob + oceanTotal;
+      const fmt = n => 'USD ' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+      function labelCell(text) {
+        return new TableCell({
+          borders, width: { size: 3500, type: WidthType.DXA },
+          shading: lightShading, margins: cellMargins,
+          children: [new Paragraph({ children: [new TextRun({ text, bold: true, font: "Arial", size: 18, color: "1a3c5e" })] })]
+        });
+      }
+      function valueCell(text) {
+        return new TableCell({
+          borders, width: { size: 5860, type: WidthType.DXA },
+          margins: cellMargins,
+          children: [new Paragraph({ children: [new TextRun({ text, bold: true, font: "Arial", size: 20, color: "c0392b" })] })]
+        });
+      }
+      function infoLabelCell(text) {
+        return new TableCell({
+          borders, width: { size: 2400, type: WidthType.DXA },
+          shading: lightShading, margins: cellMargins,
+          children: [new Paragraph({ children: [new TextRun({ text, bold: true, font: "Arial", size: 18, color: "1a3c5e" })] })]
+        });
+      }
+      function infoValueCell(text) {
+        return new TableCell({
+          borders, width: { size: 6960, type: WidthType.DXA },
+          margins: cellMargins,
+          children: [new Paragraph({ children: [new TextRun({ text, font: "Arial", size: 18, color: "333333" })] })]
+        });
+      }
+
+      // Header
+      const headerParas = [
+        new Paragraph({ spacing: { after: 40 },
+          children: [new TextRun({ text: getInputVal('.company-name input') || 'ZHONGDAO STAR', bold: true, font: "Arial", size: 28, color: "1a3c5e" })] }),
+        new Paragraph({ spacing: { after: 40 },
+          children: [new TextRun({ text: getInputVal('.company-tagline input') || '', font: "Arial", size: 16, color: "666666" })] }),
+        new Paragraph({ spacing: { after: 400 },
+          children: [new TextRun({ text: 'Date: ' + (getInputVal('#pi-date') || ''), font: "Arial", size: 18, color: "333333" })] }),
+      ];
+
+      // Vehicle table: 10 cols
+      const colWidths = [400, 700, 700, 900, 700, 800, 1000, 500, 700, 800];
+      const colHeaders = ['No.', 'Name', 'Brand', 'Model', 'Type', 'Displacement', 'FOB Unit Price (USD)', 'Qty', 'Color', 'Note'];
+      const sumWidth = colWidths.reduce((a, b) => a + b, 0);
+
+      const tableRows = [
+        new TableRow({ children: colHeaders.map((h, i) => headerCell(h, colWidths[i])) })
+      ];
+      rows.forEach(r => {
+        tableRows.push(new TableRow({ children: [
+          dataCell(r.no, colWidths[0]),
+          dataCell(r.name, colWidths[1]),
+          dataCell(r.brand, colWidths[2]),
+          dataCell(r.model, colWidths[3]),
+          dataCell(r.type, colWidths[4]),
+          dataCell(r.displacement, colWidths[5]),
+          dataCell(r.fob ? fmt(r.fob) : '', colWidths[6], { bold: true, color: "c0392b" }),
+          dataCell(String(r.qty), colWidths[7]),
+          dataCell(r.color, colWidths[8]),
+          dataCell(r.note, colWidths[9])
+        ] }));
+      });
+      // Total row
+      tableRows.push(new TableRow({ children: [
+        dataCell('', colWidths[0], { shading: lightShading }),
+        dataCell('', colWidths[1], { shading: lightShading }),
+        dataCell('', colWidths[2], { shading: lightShading }),
+        dataCell('', colWidths[3], { shading: lightShading }),
+        dataCell('', colWidths[4], { shading: lightShading }),
+        dataCell('Total FOB USD', colWidths[5], { shading: lightShading, bold: true }),
+        dataCell(fmt(totalFob), colWidths[6], { shading: lightShading, bold: true, color: "c0392b" }),
+        dataCell(String(totalQty), colWidths[7], { shading: lightShading, bold: true }),
+        dataCell('', colWidths[8], { shading: lightShading }),
+        dataCell('', colWidths[9], { shading: lightShading })
+      ] }));
+
+      const vehicleTable = new Table({
+        width: { size: sumWidth, type: WidthType.DXA },
+        columnWidths: colWidths,
+        rows: tableRows
+      });
+
+      // Summary table
+      const summaryTable = new Table({
+        width: { size: 9360, type: WidthType.DXA },
+        columnWidths: [3500, 5860],
+        rows: [
+          new TableRow({ children: [labelCell('Total FOB USD'), valueCell(fmt(totalFob))] }),
+          new TableRow({ children: [labelCell('Amount in Words (FOB)'), dataCell(numberToWords(totalFob), 5860)] }),
+          new TableRow({ children: [labelCell('Total FOB Amount Payable to Seller'), valueCell(fmt(totalFob))] }),
+          new TableRow({ children: [labelCell('Ocean Freight Payable by Buyer'), valueCell(fmt(oceanTotal))] }),
+          new TableRow({ children: [labelCell('Estimated Total Cost'), valueCell(fmt(grandTotal))] }),
+          new TableRow({ children: [labelCell('Amount in Words (Total)'), dataCell(numberToWords(grandTotal), 5860)] }),
+        ]
+      });
+
+      // Info table
+      const infoPairs = [
+        ['Arrival Seaport', '.info-item:nth-child(1) .info-value input'],
+        ['Departure Port', '.info-item:nth-child(2) .info-value input'],
+        ['Delivery Time to Port', '.info-item:nth-child(3) .info-value input'],
+        ['Payment Term', '.info-item:nth-child(4) .info-value input'],
+        ['Exchange Rate', '.info-item:nth-child(5) .info-value input'],
+        ['Quotation Valid Until', '#valid-date'],
+      ];
+      const infoRows = infoPairs.map(p => {
+        const val = p[1].startsWith('#') ? getInputVal(p[1]) : getInputVal(p[1]);
+        return new TableRow({ children: [infoLabelCell(p[0]), infoValueCell(val)] });
+      });
+      const infoTable = new Table({
+        width: { size: 9360, type: WidthType.DXA },
+        columnWidths: [2400, 6960],
+        rows: infoRows
+      });
+
+      // Bank info table
+      const bankPairs = [
+        ['Account Name', '.bank-item:nth-child(1) .info-value input'],
+        ['Account Number', '.bank-item:nth-child(2) .info-value input'],
+        ['Bank Name', '.bank-item:nth-child(3) .info-value input'],
+        ['SWIFT Code', '.bank-item:nth-child(4) .info-value input'],
+        ['Bank Address', '.bank-item:nth-child(5) .info-value input'],
+      ];
+      const bankRows = bankPairs.map(p => {
+        return new TableRow({ children: [infoLabelCell(p[0]), infoValueCell(getInputVal(p[1]))] });
+      });
+      const bankTable = new Table({
+        width: { size: 9360, type: WidthType.DXA },
+        columnWidths: [2400, 6960],
+        rows: bankRows
+      });
+
+      // Ocean freight row
+      const oceanPara = new Paragraph({ spacing: { before: 200, after: 200 },
+        children: [new TextRun({ text: 'Ocean Freight (MSC, for Buyer\'s account): USD ' + getInputVal('#ocean-rate') + ' / container x ' + getInputVal('#ocean-containers') + ' containers = ' + fmt(oceanTotal), font: "Arial", size: 18, bold: true, color: "1a3c5e" })] });
+
+      // Terms
+      const termsParas = [
+        new Paragraph({ spacing: { before: 300, after: 100 }, children: [new TextRun({ text: 'Terms & Conditions', bold: true, font: "Arial", size: 20, color: "1a3c5e" })] }),
+        new Paragraph({ spacing: { after: 60 }, children: [new TextRun({ text: '1. The quotation is based on the exchange rate above. If the exchange rate drops by more than 0.5%, the price shall be adjusted according to the updated exchange rate.', font: "Arial", size: 18, color: "666666" })] }),
+        new Paragraph({ spacing: { after: 60 }, children: [new TextRun({ text: '2. Ocean freight shall be borne and paid separately by the Buyer. If the actual sea freight is higher than the freight stated in this PI, the Buyer shall pay the difference.', font: "Arial", size: 18, color: "666666" })] }),
+        new Paragraph({ spacing: { after: 60 }, children: [new TextRun({ text: '3. If payment is received after the validity date, existing vehicle resources may be sold or prices may fluctuate. In that case, the delivery time and price shall be renegotiated.', font: "Arial", size: 18, color: "666666" })] }),
+      ];
+
+      // PI Title
+      const piTitle = new Paragraph({ alignment: AlignmentType.RIGHT, spacing: { after: 200 },
+        children: [new TextRun({ text: 'PROFORMA INVOICE', bold: true, font: "Arial", size: 26, color: "1a3c5e" })] });
+
+      const doc = new Document({
+        styles: {
+          default: { document: { run: { font: "Arial", size: 18 } } },
+        },
+        sections: [{
+          properties: {
+            page: {
+              size: { width: 11906, height: 16838 },
+              margin: { top: 1440, right: 1200, bottom: 1440, left: 1200 }
+            }
+          },
+          children: [
+            piTitle,
+            ...headerParas,
+            new Paragraph({ spacing: { before: 200, after: 120 }, children: [new TextRun({ text: 'VEHICLE QUOTATION', bold: true, font: "Arial", size: 20, color: "1a3c5e" })] }),
+            vehicleTable,
+            new Paragraph({ spacing: { before: 300, after: 120 }, children: [new TextRun({ text: 'SUMMARY', bold: true, font: "Arial", size: 20, color: "1a3c5e" })] }),
+            summaryTable,
+            oceanPara,
+            new Paragraph({ spacing: { before: 300, after: 120 }, children: [new TextRun({ text: 'SHIPPING & PAYMENT DETAILS', bold: true, font: "Arial", size: 20, color: "1a3c5e" })] }),
+            infoTable,
+            new Paragraph({ spacing: { before: 300, after: 120 }, children: [new TextRun({ text: 'SELLER BANK INFORMATION', bold: true, font: "Arial", size: 20, color: "1a3c5e" })] }),
+            bankTable,
+            ...termsParas,
+          ]
+        }]
+      });
+
+      Packer.toBlob(doc).then(blob => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'ZDSTAR_Proforma_Invoice.docx';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        loading.classList.remove('show');
+      }).catch(err => {
+        loading.classList.remove('show');
+        alert('Word generation failed: ' + err.message);
+      });
+    } catch (err) {
+      loading.classList.remove('show');
+      alert('Word generation failed: ' + err.message);
+    }
+  }, 100);
+}
 function downloadPDF() {
   const loading = document.getElementById('loading');
   loading.classList.add('show');
